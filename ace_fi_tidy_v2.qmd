@@ -1,0 +1,453 @@
+---
+title: "ACE and Food Insecurity"
+subtitle: "Tidy"
+date: July 10, 2023
+author: "Noah Gibson"
+format: 
+    html:
+      self-contained: true 
+      theme: spacelab
+      toc: true
+      number-sections: true
+      code-tools: true
+      code-fold: true
+      df-print: paged
+editor: source
+execute:
+  echo: true
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+```
+
+The purpose of this document is to download and clean PSID data for our project.
+
+## Download 
+```{r}
+# combination of files that were formatted with stata code
+library(haven)
+df <- read_dta("J321322/data_v1.dta")
+```
+
+## ID
+```{r}
+# add an id variable
+
+df <- df |>
+  mutate(id = (ER30001 * 1000) + ER30002)
+```
+
+## Reshape 
+
+### Subset 
+To do this, I split the dataset into four subsections and add a year variable: retro (2014), 2015, 2017, 2019. 
+
+```{r}
+df_2014 <- df |>
+  select(id, ER30001:CS14V315) |>
+  mutate(year = 2014)
+
+df_2015 <- df |>
+  select(id, ER60001:ER34303) |>
+  mutate(year = 2015)
+
+df_2017 <- df |>
+  select(id, ER66001:ER34503) |>
+  mutate(year = 2017)
+
+df_2019 <- df |>
+  select(id, ER72001:ER34703) |>
+  mutate(year = 2019)
+```
+
+### Rename
+```{r}
+df_2014_rn <- df_2014 |>
+  rename(
+    seq_num_2014 = ER34202, relation_2014 = ER34203, sex_2014 = CS14V4,
+    age_2014 = CS14V5, month = CS14V7,
+    year_int = CS14V8, ace_divorce = CS14V17,
+    ace_health = CS14V52, ace_school_health = CS14V53,
+    ace_dad_work_0_5 = CS14V160, ace_dad_work_6_12 = CS14V161, 
+    ace_dad_work_13_16 = CS14V162,
+    ace_dad_unemp_0_5 = CS14V163, ace_dad_unemp_6_12 = CS14V164,
+    ace_dad_unemp_13_16 = CS14V165, ace_mom_work_0_5 = CS14V166,
+    ace_mom_work_6_12 = CS14V167, ace_mom_work_13_16 = CS14V168,
+    ace_mom_unemp_0_5 = CS14V169, ace_mom_unemp_6_12 = CS14V170,
+    ace_mom_unemp_13_16 = CS14V171, ace_fin_0_5 = CS14V172,
+    ace_fin_6_12 = CS14V173, ace_fin_13_16 = CS14V174,
+    ace_welfare_0_5 = CS14V175, ace_welfare_6_12 = CS14V176,
+    ace_welfare_13_16 = CS14V177, ace_fin_comp = CS14V178,
+    nbhd_safe_night_6_12 = CS14V179, nbhd_safe_day_6_12 = CS14V180,
+    nbhd_safe_night_kids_6_12 = CS14V181, nbhd_help_6_12 = CS14V182,
+    nbhd_close_6_12 = CS14V183, nbhd_clean_6_12 = CS14V184,
+    nbhd_care_homes_6_12 = CS14V185, nbhd_same_6_16 = CS14V186,
+    nbhd_safe_night_13_16 = CS14V187, nbhd_safe_day_13_16 = CS14V188,
+    nbhd_safe_night_kids_13_16 = CS14V189, nbhd_help_13_16 = CS14V190,
+    nbhd_close_13_16 = CS14V191, nbhd_clean_13_16 = CS14V192,
+    nbhd_care_homes_13_16 = CS14V193, ace_lonely_6_12 = CS14V194,
+    ace_lonely_13_16 = CS14V197, ace_repeat_school = CS14V202,
+    ace_bullied_school_6_12 = CS14V206, ace_bullied_out_6_12 = CS14V207,
+    ace_school_happy_6_12 = CS14V208, ace_school_safety_6_12 = CS14V209,
+    ace_bullied_school_13_16 = CS14V212, ace_bullied_out_13_16 = CS14V213,
+    ace_school_happy_13_16 = CS14V214, ace_school_safety_13_16 = CS14V215,
+    mom_communication = CS14V278, mom_understand_probs = CS14V279,
+    mom_confide = CS14V280, mom_tension = CS14V281,
+    mom_relationship = CS14V282, mom_close = CS14V283,
+    mom_strict = CS14V284, mom_affection = CS14V285,
+    mom_effort = CS14V286, dad_communication = CS14V291,
+    dad_understand_probs = CS14V292, dad_confide = CS14V293,
+    dad_tension = CS14V294, dad_relationship = CS14V295,
+    dad_close = CS14V296, dad_strict = CS14V297,
+    dad_affection = CS14V298, weight_2014 = CS14V315
+  ) |>
+  select(-ER30001, -ER30002, -ER34201, -CS14V1)
+```
+
+```{r}
+df_2015_rn <- df_2015 |>
+  rename(
+    age = ER60017, sex = ER60018, age_sp = ER60019,
+    sex_sp = ER60020, fam_together_meal = ER60693,
+    wic = ER60715, free_lunch = ER60717, snap = ER60719,
+    fd1_foo_ran_out = ER60760, fd2_food_last = ER60761,
+    fd3_balanced_meals = ER60762, fd4_meal_size = ER60763,
+    fd5_often_meal_size = ER60764, fd6_ate_less = ER60765,
+    fd7_hungry = ER60766, fd8_lost_weight = ER60767,
+    fd9_not_eat_day = ER60768, fd10_often_not_eat = ER60769,
+    fd11_low_cost_food_child = ER60771, imp_fd1 = ER60779,
+    imp_fd2 = ER60780, imp_fd3 = ER60781, imp_fd4 = ER60782,
+    imp_fd6 = ER60784, imp_fd7 = ER60785, imp_fd8 = ER60786,
+    imp_fd9 = ER60787, imp_fd11 = ER60789, fs_raw = ER60797,
+    fs_scaled = ER60798, fs_status = ER60799,
+    health_status = ER62366, health_status_sp = ER63482,
+    spanish_descent_sp = ER64670, race_sp = ER64671,
+    ethnicity_sp = ER64676, spanish_descent = ER64809,
+    race = ER64810, ethnicity = ER64815,
+    income = ER65349, wealth_wo_equity = ER65406,
+    wealth_w_equity = ER65408, educ = ER65459,
+    educ_sp = ER65460, weight_2015 = ER65492,
+    seq_num_2015 = ER34302, relation_2015 = ER34303
+  ) |>
+  select(-ER60001, -ER34301, )
+```
+
+### Merge 
+```{r}
+# this merges the data and filters for respondents that are heads, spouses, and long-term partners
+
+d_join <- inner_join(df_2014_rn, df_2015_rn, by = "id") |>
+  filter(relation_2015 %in% c(10, 20, 22))
+```
+
+
+```{r}
+#| eval: false
+#| echo: false
+
+# tester
+# this is how I will combine each dataframe
+n1 <- data.frame(id = 1, year = 2017, educ = 20, ed = 30)
+
+n2 <- data.frame(id = 1, year = 2019, educ = 23)
+
+# this is similar to the 2014 data
+n3 <- data.frame(id = 1, did = 30)
+
+long_dataset <- bind_rows(n1, n2)
+
+final_dataset <- inner_join(long_dataset, n3, by = "id")
+```
+
+
+## Clean 
+
+### Select 
+```{r}
+
+d <- d_join |>
+  select(
+    id, ace_divorce, ace_health, ace_school_health, ace_dad_unemp_0_5,
+    ace_dad_unemp_6_12, ace_dad_unemp_13_16, ace_mom_unemp_0_5,
+    ace_mom_unemp_6_12, ace_mom_unemp_13_16, ace_fin_0_5,
+    ace_fin_6_12, ace_fin_13_16, ace_welfare_0_5,
+    ace_welfare_6_12, ace_welfare_13_16, ace_fin_comp, ace_lonely_6_12,
+    ace_lonely_13_16, ace_repeat_school, ace_bullied_school_6_12,
+    ace_bullied_school_13_16, ace_bullied_out_6_12,
+    ace_bullied_out_13_16, ace_school_happy_6_12,
+    ace_school_happy_13_16, ace_school_safety_6_12,
+    ace_school_safety_13_16, age, sex, wic, free_lunch, snap, fs_raw,
+    fs_scaled, fs_status, health_status, spanish_descent, race,
+    ethnicity, income, wealth_w_equity, educ, relation_2015, weight_2015
+  )
+```
+
+### Mutate
+```{r}
+
+d <- d |>
+  mutate(
+    ace_divorce = case_when(
+      ace_divorce == 1 ~ "divorced",
+      ace_divorce == 5 ~ "not divorced",
+      ace_divorce == 0 ~ "not applicable",
+      ace_divorce == 9 ~ NA),
+    ace_health = if_else(
+      ace_health == 9, NA, ace_health),
+    ace_health = factor(ace_health,
+                        labels = c("excellent", "very good", 
+                                   "good", "fair", "poor")),
+    ace_school_health = case_when(
+      ace_school_health == 1 ~ 1,
+      ace_school_health == 5 ~ 0, 
+      ace_school_health == 9 ~ NA),
+    ace_mom_unemp_0_5 = case_when(
+      ace_mom_unemp_0_5 == 1 ~ 0,
+      ace_mom_unemp_0_5 == 2 ~ 1,
+      ace_mom_unemp_0_5 == 3 ~ 2,
+      ace_mom_unemp_0_5 == 4 ~ 3,
+      ace_mom_unemp_0_5 == 9 ~ NA,
+      ace_mom_unemp_0_5 == 0 ~ 0),
+    ace_mom_unemp_6_12 = case_when(
+      ace_mom_unemp_6_12 == 1 ~ 0,
+      ace_mom_unemp_6_12 == 2 ~ 1,
+      ace_mom_unemp_6_12 == 3 ~ 2,
+      ace_mom_unemp_6_12 == 4 ~ 3,
+      ace_mom_unemp_6_12 == 9 ~ NA,
+      ace_mom_unemp_6_12 == 0 ~ 0),
+    ace_mom_unemp_13_16 = case_when(
+      ace_mom_unemp_13_16 == 1 ~ 0,
+      ace_mom_unemp_13_16 == 2 ~ 1,
+      ace_mom_unemp_13_16 == 3 ~ 2,
+      ace_mom_unemp_13_16 == 4 ~ 3,
+      ace_mom_unemp_13_16 == 9 ~ NA,
+      ace_mom_unemp_13_16 == 0 ~ 0),
+    ace_mom_unemp = ace_mom_unemp_0_5 + ace_mom_unemp_6_12 + ace_mom_unemp_13_16,
+    ace_dad_unemp_0_5 = case_when(
+      ace_dad_unemp_0_5 == 1 ~ 0,
+      ace_dad_unemp_0_5 == 2 ~ 1,
+      ace_dad_unemp_0_5 == 3 ~ 2,
+      ace_dad_unemp_0_5 == 4 ~ 3,
+      ace_dad_unemp_0_5 == 9 ~ NA,
+      ace_dad_unemp_0_5 == 0 ~ 0),
+    ace_dad_unemp_6_12 = case_when(
+      ace_dad_unemp_6_12 == 1 ~ 0,
+      ace_dad_unemp_6_12 == 2 ~ 1,
+      ace_dad_unemp_6_12 == 3 ~ 2,
+      ace_dad_unemp_6_12 == 4 ~ 3,
+      ace_dad_unemp_6_12 == 9 ~ NA,
+      ace_dad_unemp_6_12 == 0 ~ 0),
+    ace_dad_unemp_13_16 = case_when(
+      ace_dad_unemp_13_16 == 1 ~ 0,
+      ace_dad_unemp_13_16 == 2 ~ 1,
+      ace_dad_unemp_13_16 == 3 ~ 2,
+      ace_dad_unemp_13_16 == 4 ~ 3,
+      ace_dad_unemp_13_16 == 9 ~ NA,
+      ace_dad_unemp_13_16 == 0 ~ 0),
+    ace_dad_unemp = ace_dad_unemp_0_5 + ace_dad_unemp_6_12 + ace_dad_unemp_13_16,
+    ace_fin_0_5 = case_when(
+      ace_fin_0_5 == 1 ~ 1,
+      ace_fin_0_5 == 5 ~ 0,
+      ace_fin_0_5 == 9 ~ NA),
+    ace_fin_6_12 = case_when(
+      ace_fin_6_12 == 1 ~ 1,
+      ace_fin_6_12 == 5 ~ 0,
+      ace_fin_6_12 == 9 ~ NA),
+    ace_fin_13_16 = case_when(
+      ace_fin_13_16 == 1 ~ 1,
+      ace_fin_13_16 == 5 ~ 0,
+      ace_fin_13_16 == 9 ~ NA),
+    ace_fin = ace_fin_0_5 + ace_fin_6_12 + ace_fin_13_16,
+    ace_welfare_0_5 = case_when(
+      ace_welfare_0_5 == 1 ~ 1,
+      ace_welfare_0_5 == 5 ~ 0,
+      ace_welfare_0_5 == 9 ~ NA),
+    ace_welfare_6_12 = case_when(
+      ace_welfare_6_12 == 1 ~ 1,
+      ace_welfare_6_12 == 5 ~ 0,
+      ace_welfare_6_12 == 9 ~ NA),
+    ace_welfare_13_16 = case_when(
+      ace_welfare_13_16 == 1 ~ 1,
+      ace_welfare_13_16 == 5 ~ 0,
+      ace_welfare_13_16 == 9 ~ NA),
+    ace_fin = ace_welfare_0_5 + ace_welfare_6_12 + ace_welfare_13_16, 
+    ace_fin_comp = if_else(
+      ace_fin_comp == 9, NA, ace_fin_comp),
+    ace_fin_comp = factor(ace_fin_comp,
+                        labels = c("a lot better off", "somewhat better off", 
+                                   "same as", "somewhat worse off", 
+                                   "a lot worse off")),
+    ace_lonely_6_12 = if_else(
+      ace_lonely_6_12 == 9, NA, ace_lonely_6_12),
+    ace_lonely_6_12 = factor(ace_lonely_6_12,
+                        labels = c("often", "sometimes", 
+                                   "not very often", "never")),
+    ace_lonely_13_16 = if_else(
+      ace_lonely_13_16 == 9, NA, ace_lonely_13_16),
+    ace_lonely_13_16 = factor(ace_lonely_13_16,
+                        labels = c("often", "sometimes", 
+                                   "not very often", "never")),
+    ace_repeat_school = case_when(
+      ace_repeat_school == 1 ~ 1,
+      ace_repeat_school == 5 ~ 0,
+      ace_repeat_school == 9 ~ NA),
+    ace_bullied_school_6_12 = if_else(
+      ace_bullied_school_6_12 == 9, NA, ace_bullied_school_6_12),
+    ace_bullied_school_6_12 = factor(ace_bullied_school_6_12,
+                        labels = c("a lot", "sometimes", 
+                                   "rarely", "never")),
+    ace_bullied_school_13_16 = if_else(
+      ace_bullied_school_13_16 == 9, NA, ace_bullied_school_13_16),
+    ace_bullied_school_13_16 = factor(ace_bullied_school_13_16,
+                        labels = c("a lot", "sometimes", 
+                                   "rarely", "never")),  
+    ace_bullied_out_6_12 = if_else(
+      ace_bullied_out_6_12 == 9, NA, ace_bullied_out_6_12),
+    ace_bullied_out_6_12 = factor(ace_bullied_out_6_12,
+                        labels = c("a lot", "sometimes", 
+                                   "rarely", "never")),
+    ace_bullied_out_13_16 = if_else(
+      ace_bullied_out_13_16 == 9, NA, ace_bullied_out_13_16),
+    ace_bullied_out_13_16 = factor(ace_bullied_out_13_16,
+                        labels = c("a lot", "sometimes", 
+                                   "rarely", "never")),
+    ace_school_happy_6_12 = if_else(
+      ace_school_happy_6_12 == 9, NA, ace_school_happy_6_12),
+    ace_school_happy_6_12 = factor(ace_school_happy_6_12,
+                        labels = c("a lot", "sometimes", 
+                                   "rarely", "never")),
+    ace_school_happy_13_16 = if_else(
+      ace_school_happy_13_16 == 9, NA, ace_school_happy_13_16),
+    ace_school_happy_13_16 = factor(ace_school_happy_13_16,
+                        labels = c("a lot", "sometimes", 
+                                   "rarely", "never")),
+    ace_school_safety_6_12 = if_else(
+      ace_school_safety_6_12 == 9, NA, ace_school_safety_6_12),
+    ace_school_safety_6_12 = factor(ace_school_safety_6_12,
+                        labels = c("a lot", "sometimes", 
+                                   "rarely", "never")),
+    ace_school_safety_13_16 = if_else(
+      ace_school_safety_13_16 == 9, NA, ace_school_safety_13_16),
+    ace_school_safety_13_16 = factor(ace_school_safety_13_16,
+                        labels = c("a lot", "sometimes", 
+                                   "rarely", "never")),
+    female = if_else(sex == 2, 1, 0),
+    wic = case_when(wic == 1 ~ 1, 
+                    wic == 9 ~ NA, 
+                    TRUE ~ 0),
+    free_lunch = case_when(free_lunch == 1 ~ 1, 
+                    free_lunch == 9 ~ NA, 
+                    TRUE ~ 0),
+    snap = case_when(snap == 1 ~ 1, 
+                    snap == 9 ~ NA, 
+                    TRUE ~ 0),
+    fs = if_else(fs_status <= 2, 0, 1),
+    health_status = if_else(
+      health_status >= 8, NA, health_status),
+    health_status = factor(health_status,
+                        labels = c("excellent", "very good", 
+                                   "good", "fair", "poor")),
+    race = case_when(race == 1 ~ "White",
+                     race == 2 ~ "Black",
+                     race == 3 ~ "American Indian",
+                     race == 4 ~ "Asian", 
+                     race == 5 | race == 7 ~ "Other",
+                     TRUE ~ NA),
+    educ = if_else(educ == 99, NA, educ)
+    )
+    
+    
+```
+
+
+## Desriptives (quick)
+
+```{r}
+library(skimr)
+skim(d)
+```
+
+## Save data 
+```{r}
+#| echo=FALSE
+
+write.csv(d, "ace_fi_tidy.csv")
+```
+
+# Version 2
+
+## Mutate 
+
+```{r}
+
+d_dum <- d |> 
+  mutate(ace_divorce = case_when(ace_divorce == "divorced" ~ 1,
+                                 ace_divorce == "not divorced" ~ 0,
+                                 ace_divorce == "not applicable" ~ 0),
+         ace_health = as.numeric(ace_health),
+         ace_health = if_else(ace_health >= 4, 1, 0),
+         ace_dad_unemp_0_5 = if_else(ace_dad_unemp_0_5 == 0, 0, 1),
+         ace_dad_unemp_6_12 = if_else(ace_dad_unemp_6_12 == 0, 0, 1),
+         ace_dad_unemp_13_16 = if_else(ace_dad_unemp_13_16 == 0, 0, 1), 
+         ace_mom_unemp_0_5 = if_else(ace_mom_unemp_0_5 == 0, 0, 1),
+         ace_mom_unemp_6_12 = if_else(ace_mom_unemp_6_12 == 0, 0, 1),
+         ace_mom_unemp_13_16 = if_else(ace_mom_unemp_13_16 == 0, 0, 1),
+         ace_fin_comp = as.numeric(ace_fin_comp), 
+         ace_fin_comp = if_else(ace_fin_comp >= 4, 1, 0),
+         ace_lonely_6_12 = as.numeric(ace_lonely_6_12),
+         ace_lonely_6_12 = if_else(ace_lonely_6_12 <= 2, 1, 0),
+         ace_lonely_13_16 = as.numeric(ace_lonely_13_16),
+         ace_lonely_13_16 = if_else(ace_lonely_13_16 <= 2, 1, 0),
+         ace_bullied_school_6_12 = as.numeric(ace_bullied_school_6_12),
+         ace_bullied_school_6_12 = if_else(ace_bullied_school_6_12 <= 2, 1, 0),
+         ace_bullied_school_13_16 = as.numeric(ace_bullied_school_13_16),
+         ace_bullied_school_13_16 = if_else(ace_bullied_school_13_16 <= 2, 1, 0),
+         ace_bullied_out_6_12 = as.numeric(ace_bullied_out_6_12),
+         ace_bullied_out_6_12 = if_else(ace_bullied_out_6_12 <= 2, 1, 0),
+         ace_bullied_out_13_16 = as.numeric(ace_bullied_out_13_16),
+         ace_bullied_out_13_16 = if_else(ace_bullied_out_13_16 <= 2, 1, 0),
+         ace_school_happy_6_12 = as.numeric(ace_school_happy_6_12),
+         ace_school_happy_6_12 = if_else(ace_school_happy_6_12 >= 3, 1, 0),
+         ace_school_happy_13_16 = as.numeric(ace_school_happy_13_16),
+         ace_school_happy_13_16 = if_else(ace_school_happy_13_16 >= 3, 1, 0),
+         ace_school_safety_6_12 = as.numeric(ace_school_safety_6_12),
+         ace_school_safety_6_12 = if_else(ace_school_safety_6_12 <= 2, 1, 0),
+         ace_school_safety_13_16 = as.numeric(ace_school_safety_13_16),
+         ace_school_safety_13_16 = if_else(ace_school_safety_13_16 <= 2, 1, 0)
+         )
+```
+
+## Average/Standardize
+
+```{r}
+d_dum <- d_dum |> 
+  mutate(avg_fin = rowMeans(across(c(ace_dad_unemp_0_5, ace_dad_unemp_6_12, ace_dad_unemp_13_16,
+                        ace_mom_unemp_0_5, ace_mom_unemp_6_12, ace_mom_unemp_13_16,
+                        ace_fin_0_5, ace_fin_6_12, ace_fin_13_16, 
+                        ace_welfare_0_5, ace_welfare_6_12, ace_welfare_13_16,
+                        ace_fin_comp)), na.rm = TRUE),
+         avg_emt = rowMeans(across(c(ace_divorce, ace_lonely_6_12, ace_lonely_13_16,
+                        ace_bullied_out_6_12, ace_bullied_out_13_16)), na.rm = TRUE),
+         avg_health = rowMeans(across(c(ace_health, ace_school_health)), 
+                                          na.rm = TRUE),
+         avg_health = as.numeric(avg_health),
+         avg_school = rowMeans(across(c(ace_repeat_school, ace_bullied_school_6_12, 
+                                   ace_bullied_school_13_16,ace_school_happy_6_12, 
+                                   ace_school_happy_13_16,ace_school_safety_6_12,
+                                   ace_school_safety_13_16)), na.rm = TRUE),
+         std_fin = scale(avg_fin),
+         std_emt = scale(avg_emt),
+         std_health = scale(avg_health),
+         std_school = scale(avg_school))
+```
+
+## Save data 
+```{r}
+#| echo=FALSE
+
+write.csv(d_dum, "ace_fi_tidy_v2.csv")
+```
