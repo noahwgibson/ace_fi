@@ -1,0 +1,599 @@
+---
+title: "ACE and Food Insecurity"
+subtitle: "Descriptives Tables and Figures"
+date: October 22, 2023
+author: "Noah Gibson"
+format: 
+    html: 
+      self-contained: true
+      theme: spacelab
+      toc: true
+      number-sections: true
+      code-tools: true
+      code-fold: true
+      df-print: kable
+editor: source
+execute:
+  echo: false
+  message: false
+  warning: false
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r}
+#| echo: false
+#| message: false
+library(tidyverse)
+library(ggplot2)
+library(pilot)
+theme_set(theme_pilot())
+```
+
+The purpose of this document is to create ~final weighted descriptives and tables. 
+
+To create `ace_fi_tidy_v2.csv`, I merged two PSID datasets: the Childhood Retrospective Circumstances Study (collected in 2014) and the 2015 Individual- and Family-level datasets. `ace_fi_tidy_v2.csv` includes three types of individuals: reference persons, spouses, and long-term partners (see `ace_fi_tidy_v2.qmd` for code). I also downloaded the 2017 and 2019 PSID waves but am still trying to figure out if we need them.
+
+## Download/clean data 
+
+Here is a summary of our variables of interest: 
+
+```{r}
+d <- read.csv("ace_fi_tidy_v2.csv")
+
+d <- d |> 
+  mutate(race_eth = case_when(race == "White" & spanish_descent == 0 ~ "White",
+                              race == "Black" & spanish_descent == 0 ~ "Black",
+                              spanish_descent > 0 ~ "Hispanic",
+                              (race != "White" & race != "Black" 
+                               & spanish_descent == 0) ~ "Other"),
+         log_income = log10(income + 1))
+
+d <- d |> 
+  filter(relation_2015 == 10) |> 
+  select(-ace_fin, -ace_dad_unemp, -ace_mom_unemp, -X, -sex, -wic, -free_lunch,
+         -fs_raw, -fs_scaled, -fs_status, -ethnicity, -wealth_w_equity, -relation_2015,
+         -avg_fin, -avg_emt, -avg_health, -avg_school, -std_fin, -std_emt, -std_health,
+         -std_school, -spanish_descent, -race)
+
+d <- d |> 
+  mutate(cum_ace = rowSums(select(d, starts_with("ace_"))))
+  
+```
+
+```{r}
+library(skimr)
+skim(d)
+```
+
+```{r}
+#| label: tidy lca 
+
+d_lca <- d |> 
+  mutate(ace_dad_unemp = ace_dad_unemp_0_5 + ace_dad_unemp_6_12 + ace_dad_unemp_13_16,
+         ace_mom_unemp = ace_mom_unemp_0_5 + ace_mom_unemp_6_12 + ace_mom_unemp_13_16,
+         ace_fin = ace_fin_0_5 + ace_fin_6_12 + ace_fin_13_16,
+         ace_welfare = ace_welfare_0_5 + ace_welfare_6_12 + ace_welfare_13_16,
+         ace_lonely = ace_lonely_6_12 + ace_lonely_13_16,
+         ace_bullied_school = ace_bullied_school_6_12 + ace_bullied_school_13_16,
+         ace_bullied_out = ace_bullied_out_6_12 + ace_bullied_out_13_16,
+         ace_school_happy = ace_school_happy_6_12 + ace_school_happy_13_16,
+         ace_school_safety = ace_school_safety_6_12 + ace_school_safety_13_16)
+
+```
+
+```{r}
+#| cache: false
+#| results: hide
+
+library(poLCA) 
+
+# Assuming your dataset is named 'ace_data'
+
+d_results <- d_lca |> 
+  dplyr::select(starts_with("ace"), id) |>
+  dplyr::select(ace_divorce, ace_health, ace_school_health, ace_dad_unemp, 
+                ace_mom_unemp, ace_fin, ace_welfare, ace_fin_comp, ace_lonely,
+                ace_repeat_school, ace_bullied_school, ace_bullied_out, 
+                ace_school_happy, ace_school_safety, id) |> 
+  mutate(across(starts_with("ace"), ~ . + 1))
+
+# Assuming your data is stored in the data frame 'your_data'
+ace_variables <- colnames(d_results)[grep("^ace", colnames(d_results))]  # Assuming ACE variables start with "ace"
+
+# Create the formula with all ACE variables
+formula <- cbind(ace_divorce, ace_health, ace_school_health, ace_dad_unemp, 
+                ace_mom_unemp, ace_fin, ace_welfare, ace_fin_comp, ace_lonely,
+                ace_repeat_school, ace_bullied_school, ace_bullied_out, 
+                ace_school_happy, ace_school_safety)~1
+
+
+# Run LCA
+set.seed(1234)
+results6 <- poLCA(formula, data = d_results, nclass = 6, nrep = 25)
+
+posterior_probs <- results6$posterior
+class_memberships <- max.col(posterior_probs)
+
+# make sure dataset has same number of dropped observations 
+d_0 <- d_lca |> 
+  dplyr::select(ace_divorce, ace_health, ace_school_health, ace_dad_unemp, 
+                ace_mom_unemp, ace_fin, ace_welfare, ace_fin_comp, ace_lonely,
+                ace_repeat_school, ace_bullied_school, ace_bullied_out, 
+                ace_school_happy, ace_school_safety, id) |> 
+  na.omit()
+d_00 <- d |> 
+  dplyr::select(-starts_with("ace"))
+
+d_0 <- inner_join(d_0, d_00, by = "id")
+
+# combine with class
+d_0 <- cbind(d_0, class_memberships)
+
+```
+
+## Descriptive table by class (ace variables)
+
+Here is a breakdown of responses to ACE questions by class membership. I think this serves as a nice "Table 1" in our paper. 
+```{r}
+library(gtsummary) # for bold_labels()
+library(survey)
+
+d_0 <- d_0 |> 
+  mutate(class_memberships = case_when(class_memberships == 1 ~ "Financial",
+                                       class_memberships == 2 ~ "High",
+                                       class_memberships == 3 ~ "Emotional",
+                                       class_memberships == 4 ~ "School-related",
+                                       class_memberships == 5 ~ "Limited",
+                                       class_memberships == 6 ~ "Parental")) |> 
+  mutate(class_memberships = as.factor(class_memberships), 
+         class_memberships = relevel(class_memberships, ref = "Limited")) |> 
+  mutate(health_status = as.factor(health_status), 
+         health_status = relevel(health_status, ref = "poor")) |> 
+  mutate(race_eth = as.factor(race_eth), 
+         race_eth= relevel(race_eth, ref = "White"))
+
+wgt <- svydesign(id=~id, weights=~weight_2015, nest = TRUE, data = d_0)
+
+wgt |>
+  tbl_svysummary(
+    include = c(starts_with("ace_"), cum_ace),
+    by = class_memberships ,
+    statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{p}%"),
+    digits = list(all_categorical() ~ c(1, 1),
+                  all_continuous() ~ c(1, 1))
+  ) |> 
+  modify_header(label = "**Variable**",
+                all_stat_cols() ~ "**{level}** ({style_percent(p, digits=1)}%)"
+  ) |> 
+  modify_caption("Weighted descriptive statistics for all variables (n = 3,927)") |> 
+  bold_labels()
+```
+
+
+## Descriptive table by class (controls)
+
+And here are our control variables by class. 
+```{r}
+
+wgt |>
+  tbl_svysummary(
+    include = c(fs, age, income, educ, snap, health_status, female, race_eth),
+    by = class_memberships ,
+    statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{p}%"),
+    digits = list(all_categorical() ~ c(1, 1),
+                  all_continuous() ~ c(1, 1))
+  ) |> 
+  modify_header(label = "**Variable**",
+                all_stat_cols() ~ "**{level}** ({style_percent(p, digits=1)}%)"
+  ) |> 
+  modify_caption("Weighted descriptive statistics for all variables (n = 3,927)") |> 
+  bold_labels()
+
+```
+
+## Model comparisons
+As I see it, one key contribution of our paper is improving on cumulative measures of ACEs. So I think it is important to highlight how our approach differs from cumulative measures. This might not be exactly what we want to include in our paper, but I think it is at least interesting to look at. 
+
+Let's compare three models to see which is most statistically informative. Model 1 includes all controls but does not include information on adversity. Model 2 includes all controls and class membership. Model 3 includes all controls and a cumulative measure of adversity. 
+```{r}
+library(splines)
+
+mod1 <- svyglm(fs ~ age + log_income + female + snap + 
+                    race_eth + educ + health_status, design = wgt, family = quasibinomial)
+
+mod2 <- svyglm(fs ~ class_memberships + age + log_income + female + snap + 
+                    race_eth + educ + health_status, design = wgt, family = quasibinomial)
+
+mod3 <- svyglm(fs ~ cum_ace + age + log_income + female + snap + 
+                    race_eth + educ + health_status, design = wgt, family = quasibinomial)
+
+library(modelsummary)
+modelsummary(list(mod1,mod2, mod3), estimate = "{estimate}{stars}")
+```
+
+There aren't huge differences between models in terms of BIC and AIC, so we can't really make the case that our approach is improving model fit. This makes senses though, given that a cumulative measure of ACE includes more variation than class membership. 
+
+## Cumulative ACE measure by class
+One key way to motivate our paper is by arguing that certain ACE variables are more negatively associated with food insecurity than others. For instance, based on the graph below, previous papers would argue that the `High` class has higher rates of food insecurity than the `School-related` and `Financial` classes. But we find that the `School-related` class has food insecurity rate that is similar to `High`. 
+
+```{r}
+library(ggridges)
+ 
+d_0 |> 
+  ggplot(aes(y = reorder(class_memberships, cum_ace),
+             x = cum_ace, fill = class_memberships))+
+  geom_jitter(aes(color = class_memberships),
+             position = position_jitter(w = .3, h = .05),
+             size = 0.75,
+             alpha = 0.15) +
+  geom_boxplot(width = .25,
+               outlier.shape = NA,
+               alpha = 0.6) +
+  geom_density_ridges(alpha = .6, scale = .8, 
+                      position = position_nudge(y = .175))+
+    scale_fill_pilot()+
+    scale_color_pilot()+
+    theme(legend.position="none")+
+    labs(title = "Cumulative ACE Score by Class", y = "Class", 
+         x = "Cumulative ACE Score")+
+    scale_x_continuous(limits = c(0,24))
+
+```
+### Table (for exact numbers when writing)
+```{r}
+
+wgt |>
+  tbl_svysummary(
+    include = cum_ace,
+    by = class_memberships ,
+    statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{p}%"),
+    digits = list(all_categorical() ~ c(1, 1),
+                  all_continuous() ~ c(1, 1))
+  ) |> 
+  modify_header(label = "**Variable**",
+                all_stat_cols() ~ "**{level}** ({style_percent(p, digits=1)}%)"
+  ) |> 
+  modify_caption("Weighted descriptive statistics for cumulative ACE score (n = 3,927)") |> 
+  bold_labels()
+
+```
+
+
+
+## Cumulative finacial ACE variables by class
+
+Interestingly, the `School-related` class has low levels of financial adversity as children (I created a cumulative ACE measure just based on the three financial ACE variables). Is it worth including a few graphs like this in our paper?
+
+```{r}
+d_0 <- d_0 %>%
+  mutate(cum_fin = rowSums(select(d_0, ace_fin, ace_fin_comp, ace_welfare)))
+
+d_0 |> 
+  ggplot(aes(y = reorder(class_memberships, cum_fin),
+             x = cum_fin, fill = class_memberships))+
+  geom_jitter(aes(color = class_memberships),
+             position = position_jitter(w = .3, h = .05),
+             size = 0.75,
+             alpha = 0.15) +
+  geom_boxplot(width = .25,
+               outlier.shape = NA,
+               alpha = 0.6) +
+  geom_density_ridges(alpha = .6, scale = .6, 
+                      position = position_nudge(y = .175))+
+    scale_fill_pilot()+
+    scale_color_pilot()+
+    theme(legend.position="none")+
+    labs(title = "Cumulative Financial ACE Score by Class", y = "Class", 
+         x = "Cumulative Financial ACE Score")+
+    scale_x_continuous(limits = c(0,8))
+
+```
+
+### Table (for exact numbers when writing)
+
+Weighted mean for cumulative ACE financial variables:
+```{r}
+
+# Create a survey design
+wgt <- svydesign(id = ~id, weights = ~weight_2015, nest = TRUE, data = d_0)
+
+# Calculate the weighted means by class_membership
+weighted_means_by_class <- svyby(~cum_fin, by = ~class_memberships, design = wgt, FUN = svymean)
+
+# Print the weighted means by class_membership
+print(weighted_means_by_class)
+
+```
+
+
+## Cumulative bullying/loneliness ACE variables by class
+
+Now let's take a look at just bullying/loneliness ACE variables. 
+
+```{r}
+d_0 <- d_0 %>%
+  mutate(cum_bul = rowSums(select(d_0, ace_lonely, ace_bullied_out, ace_bullied_school)))
+
+d_0 |> 
+  ggplot(aes(y = reorder(class_memberships, cum_bul),
+             x = cum_bul, fill = class_memberships))+
+  geom_jitter(aes(color = class_memberships),
+             position = position_jitter(w = .3, h = .05),
+             size = 0.75,
+             alpha = 0.15) +
+  geom_boxplot(width = .25,
+               outlier.shape = NA,
+               alpha = 0.6) +
+  geom_density_ridges(alpha = .6, scale = .6, 
+                      position = position_nudge(y = .175))+
+  scale_fill_pilot()+
+  scale_color_pilot()+
+  theme(legend.position="none")+
+  labs(title = "Cumulative Bullying/Loneliness ACE Score by Class", 
+       y = "Class", x = "Cumulative Bullying/Loneliness ACE Score")+
+  scale_x_continuous(limits = c(0,7))
+```
+### Table (for exact numbers when writing)
+
+Weighted mean for cumulative ACE bullying/loneliness variables:
+```{r}
+
+# Create a survey design
+wgt <- svydesign(id = ~id, weights = ~weight_2015, nest = TRUE, data = d_0)
+
+# Calculate the weighted means by class_membership
+weighted_means_by_class <- svyby(~cum_bul, by = ~class_memberships, design = wgt, FUN = svymean)
+
+# Print the weighted means by class_membership
+print(weighted_means_by_class)
+
+```
+
+
+
+## Food insecurity rates by class
+
+Moving on to our outcome, the `School-related` class has a food insecurity rate that is similar to `High`, which I think is the most interesting finding in our results. (The dashed line is the average food insecurity rate for the sample.)
+
+```{r}
+
+mod2 <- svyglm(fs ~ class_memberships, design = wgt, family = quasibinomial)
+
+library(marginaleffects)
+
+p_class <- predictions(
+    mod2,
+    type = "response"
+    )
+
+p_class <- p_class|> 
+  group_by(class_memberships) |> 
+  summarise(pred = mean(estimate), lower = mean(conf.low, na.rm = TRUE),
+            upper = mean(conf.high, na.rm = TRUE)) 
+p_class
+```
+
+```{r}
+p_class %>%
+  ggplot(aes(y=reorder(class_memberships, pred), x = pred))+
+    geom_point(alpha = .4, size = 3.5, aes(color = class_memberships))+
+    geom_linerange(aes(y=reorder(class_memberships, pred), xmin=lower, xmax=upper,
+                        color = class_memberships), 
+                    alpha=.9, size=0.75)+
+    scale_color_pilot()+
+    labs(title = "Food Insecurity Rate by Class", y = "Class",
+         x = "Food Insecurity Rate")+
+    geom_vline(xintercept = .102, linetype = "dashed", color = "black")+
+    theme(legend.position="none")+
+    scale_x_continuous(breaks = seq(0, .3, by = 0.05), 
+                       labels = format(seq(0, .3, by = 0.05), nsmall = 2))
+```
+
+> Why is the food insecurity rate so high for the `School-related` group?
+
+I think we need to try to unpack this a bit in our paper. We know that the `School-related` group had 1.) low levels of financial adversity, and 2.) high levels of emotional adversity. Point 1 leads me to think that we might be able to connect this to literature on coping mechanisms. Is it possible that individuals that struggled financially in childhood have better coping strategies for financial precarity in adulthood? Point 2 makes me think of networks. I know some literature on food insecurity and social networks. Could it be that people in the `School-related` groups have fewer social resources?
+
+### Bootstrapped version 
+
+```{r}
+
+bootstrap_predictions <- function(num_bootstrap_samples, model_formula) {
+  # Create an empty matrix to store bootstrap predicted probabilities
+  bootstrap_preds <- matrix(NA, nrow = num_bootstrap_samples, 
+                            ncol = length(unique(d_0$class_memberships)))
+  
+  # Bootstrap the predictions
+  set.seed(123)  # Set a seed for reproducibility
+  
+  for (i in 1:num_bootstrap_samples) {
+    # Sample with replacement from the dataset
+    sampled_data <- d_0[sample(nrow(d_0), replace = TRUE), ]
+    
+    # Fit the logistic regression model to the resampled data
+  boot_model <- svyglm(model_formula, 
+                       design = svydesign(id = ~1, weights = ~weight_2015, 
+                                          data = sampled_data), 
+                       family = quasibinomial)
+    
+    # Calculate predicted probabilities with weights
+    p_class <- predictions(boot_model, type = "response")
+    
+    # Store the predicted probabilities in the matrix
+    bootstrap_preds[i, ] <- tapply(p_class$estimate,
+                                   p_class$class_memberships, mean)
+  }
+  
+  # Convert the matrix of bootstrap predictions to a data frame
+  bootstrap_preds_df <- as.data.frame(bootstrap_preds)
+  
+  # Tidy data
+  bootstrap_preds_df <- bootstrap_preds_df |> 
+  rename( "Limited" = "V1", 
+          "Emotional" = "V2",
+          "Financial" = "V3", 
+          "High" = "V4", 
+          "Parental" = "V5", 
+          "School-related" = "V6") |> 
+  pivot_longer(
+    cols = c("Limited":"School-related"),
+    names_to = "class_memberships",
+    values_to = "pred") |> 
+  mutate(class_memberships = as.factor(class_memberships), 
+         class_memberships = relevel(class_memberships, ref = "Limited"))
+  
+  
+  return(bootstrap_preds_df)
+}
+
+```
+
+```{r}
+m1 <- fs ~ class_memberships
+
+
+d <- bootstrap_predictions(2500, m1)
+```
+
+```{r}
+mod2 <- svyglm(fs ~ class_memberships, design = wgt, family = quasibinomial)
+
+p_class <- predictions(
+    mod2,
+    type = "response"
+    )
+
+p_class <- p_class|> 
+  group_by(class_memberships) |> 
+  summarise(pred = mean(estimate), lower = mean(conf.low, na.rm = TRUE),
+            upper = mean(conf.high, na.rm = TRUE)) 
+```
+
+
+```{r}
+  ggplot(data = p_class,
+         aes(y=reorder(class_memberships, pred), x = pred))+
+    geom_point(alpha = 1, size = 3.5, 
+               aes(y=reorder(class_memberships, pred), x = pred,
+                   color = class_memberships))+
+    geom_linerange(aes(y=reorder(class_memberships, pred),
+                       color = class_memberships, 
+                       xmin=lower, xmax=upper), 
+                       alpha= 1, size= 1.5)+
+    geom_density_ridges(data = d, 
+                        alpha = .4, scale = .8,
+                        position = position_nudge(y = 0),
+                        aes(y = reorder(class_memberships, pred),
+                        x = pred, fill = class_memberships))+
+    scale_fill_pilot()+
+    scale_color_pilot()+
+    labs(title = "", y = "Class", 
+         x = "Food Insecurity Rate")+
+    geom_vline(xintercept = .102, linetype = "dashed", color = "black")+
+    theme(legend.position="none")+
+    scale_x_continuous(breaks = seq(0, .3, by = 0.05), 
+                       labels = format(seq(0, .3, by = 0.05), nsmall = 2))
+```
+
+
+## Predicted probabilities by class
+
+Here is a look at predicted probabilities (which adjust for controls). The `School-related` class has a high predicted probability of food insecurity even when adjusting for key demographic variables in 2015.  
+
+```{r}
+
+mod2 <- svyglm(fs ~ class_memberships + age + log_income + female + snap + 
+                    race_eth + educ + health_status, 
+               design = wgt, family = quasibinomial)
+
+p_class <- predictions(
+    mod2,
+    type = "response"
+    )
+
+p_class <- p_class|> 
+  group_by(class_memberships) |> 
+  summarise(pred = mean(estimate), lower = mean(conf.low, na.rm = TRUE),
+            upper = mean(conf.high, na.rm = TRUE)) 
+p_class
+```
+
+
+```{r}
+p_class %>%
+  ggplot(aes(y=reorder(class_memberships, pred), x = pred))+
+    geom_point(alpha = .4, size = 3.5, aes(color = class_memberships))+
+    geom_linerange(aes(y=reorder(class_memberships, pred), 
+                       xmin=lower, xmax=upper,
+                       color = class_memberships), 
+                    alpha=.9, size=0.75)+
+    scale_color_pilot()+
+    labs(title = "Predicted Probability of Food Insecurity by Class", y = "Class"
+       , x = "Pr(Food Insecurity)", 
+       subtitle = "Adjusting for variables in model")+
+    geom_vline(xintercept = .102, linetype = "dashed", color = "black")+
+    theme(legend.position="none")+
+    scale_x_continuous(breaks = seq(0, .4, by = 0.05), 
+                       labels = format(seq(0, .4, by = 0.05), nsmall = 2))
+
+```
+
+### Bootstrapped version 
+```{r}
+
+m2 <- fs ~ class_memberships + age + log_income + female + snap + race_eth + educ + health_status
+
+
+d2 <- bootstrap_predictions(2500, m2)
+```
+
+```{r}
+
+mod2 <- svyglm(fs ~ class_memberships + age + log_income + female + snap + 
+                    race_eth + educ + health_status, design = wgt, 
+               family = quasibinomial)
+
+p_class <- predictions(
+    mod2,
+    type = "response"
+    )
+
+p_class <- p_class|> 
+  group_by(class_memberships) |> 
+  summarise(pred = mean(estimate), lower = mean(conf.low, na.rm = TRUE),
+            upper = mean(conf.high, na.rm = TRUE)) 
+```
+
+
+```{r}
+  ggplot(data = p_class,
+         aes(y=reorder(class_memberships, pred), x = pred))+
+    geom_point(alpha = 1, size = 3.5, 
+               aes(y=reorder(class_memberships, pred), x = pred,
+                   color = class_memberships))+
+    geom_linerange(aes(y=reorder(class_memberships, pred),
+                       color = class_memberships, 
+                       xmin=lower, xmax=upper), 
+                       alpha= 1, size= 1.5)+
+    geom_density_ridges(data = d2, 
+                        alpha = .4, scale = .8,
+                        position = position_nudge(y = 0),
+                        aes(y = reorder(class_memberships, pred),
+                        x = pred, fill = class_memberships))+
+    scale_fill_pilot()+
+    scale_color_pilot()+
+    labs(title = "", y = "Class", 
+         x = "Pr(Food Insecurity)")+
+    geom_vline(xintercept = .102, linetype = "dashed", color = "black")+
+    theme(legend.position="none")+
+    scale_x_continuous(breaks = seq(0, .3, by = 0.05), 
+                       labels = format(seq(0, .3, by = 0.05), nsmall = 2))
+```
+
+
+
+
+
